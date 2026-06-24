@@ -62,48 +62,22 @@
             <a href="dashboard.html" class="btn btn-ghost-login">Client Login</a>
             <a href="dashboard.html" class="btn btn-primary">Start Audit</a>
         </div>
-        <button class="mobile-toggle" aria-label="Toggle navigation" aria-expanded="false">
-            <span></span>
-            <span></span>
-            <span></span>
+        <button
+          id="nav-hamburger-btn"
+          class="nav-hamburger"
+          aria-label="Open navigation menu"
+          aria-expanded="false"
+          aria-controls="nav-mobile-drawer"
+        >
+          <span class="bar" aria-hidden="true"></span>
+          <span class="bar" aria-hidden="true"></span>
+          <span class="bar" aria-hidden="true"></span>
         </button>
+        
     </div>
 </nav>
 
-<!-- Mobile Navigation Drawer -->
-<div class="mobile-nav-overlay" id="mobileNavOverlay"></div>
-<div class="mobile-nav-drawer" id="mobileNavDrawer">
-    <ul class="mobile-nav-links">
-        <li><a href="index.html">Home</a></li>
-        <li><a href="#about">About</a></li>
-        <li>
-            <button>Singapore <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></button>
-            <div class="mobile-sub-drawer">
-                <a href="audit.html">ESG Readiness Audit</a>
-                <a href="frameworks.html">ESG Frameworks</a>
-                <a href="protection.html">Greenwashing Protection</a>
-            </div>
-        </li>
-        <li>
-            <button>European Union <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></button>
-            <div class="mobile-sub-drawer">
-                <a href="eu-audit.html">CSRD Gap Analysis</a>
-                <a href="eu-frameworks.html">ESRS Frameworks</a>
-                <a href="eu-protection.html">Greenwashing (EmpCo)</a>
-                <a href="eu-cbam.html">CBAM Compliance</a>
-            </div>
-        </li>
-        <li>
-            <button>Resources <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></button>
-            <div class="mobile-sub-drawer">
-                <a href="#decarb-lab">Decarbonisation Lab</a>
-                <a href="resources.html">Templates Library</a>
-            </div>
-        </li>
 
-        <li><a href="pricing.html">Pricing</a></li>
-    </ul>
-</div>
 
 
 <div class="hero">
@@ -712,6 +686,76 @@
     }
 </script>
 
+
+<div
+  id="nav-mobile-drawer"
+  class="nav-mobile-drawer"
+  role="dialog"
+  aria-modal="false"
+  aria-label="Navigation menu"
+>
+
+  <span class="mob-section-title">Singapore</span>
+  <a href="audit.html" class="mob-nav-link">
+    ESG Readiness Audit
+    <span class="dd-chip sg">SG</span>
+  </a>
+  <a href="frameworks.html" class="mob-nav-link">
+    ESG Frameworks
+    <span class="dd-chip sg">SG</span>
+  </a>
+  <a href="protection.html" class="mob-nav-link">
+    Greenwashing Protection
+    <span class="dd-chip sg">SG</span>
+  </a>
+  <a href="gill.html" class="mob-nav-link">
+    Carbon Calculator
+    <span class="dd-chip sg">SG</span>
+  </a>
+
+  <div class="mob-divider"></div>
+
+  <span class="mob-section-title">European Union</span>
+  <a href="eu-audit.html" class="mob-nav-link">
+    CSRD Gap Analysis
+    <span class="dd-chip eu">EU</span>
+  </a>
+  <a href="eu-frameworks.html" class="mob-nav-link">
+    ESRS Frameworks
+    <span class="dd-chip eu">EU</span>
+  </a>
+  <a href="eu-protection.html" class="mob-nav-link">
+    Greenwashing (EmpCo)
+    <span class="dd-chip eu">EU</span>
+  </a>
+  <a href="eu-cbam.html" class="mob-nav-link">
+    CBAM Compliance
+    <span class="dd-chip eu">EU</span>
+  </a>
+
+  <div class="mob-divider"></div>
+
+  <a href="pricing.html" class="mob-nav-link">Pricing</a>
+
+  <div class="mob-cta-group">
+    <a href="dashboard.html" class="btn btn-secondary">
+      Client Login
+    </a>
+    <button
+      class="btn btn-primary"
+      onclick="openModal('bookCall'); 
+               document.getElementById('nav-mobile-drawer')
+                 .classList.remove('is-open');
+               document.getElementById('nav-hamburger-btn')
+                 .setAttribute('aria-expanded','false');
+               document.body.classList.remove('modal-open');"
+    >
+      Book a Call
+    </button>
+  </div>
+
+</div>
+
 <div
   id="bookCallModal"
   class="modal-overlay"
@@ -788,5 +832,6 @@
 </div>
 
 <script src="js/modal.js"></script>
+<script src="js/mobile-nav.js"></script>
 </body>
 </html>
