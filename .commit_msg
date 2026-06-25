@@ -1,1 +1,1 @@
-fix: update free model slugs to current OpenRouter names
+fix: use OpenRouter native PDF/image_url instead of broken regex extractor
