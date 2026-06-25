@@ -1,1 +1,1 @@
-fix: use OpenRouter native PDF/image_url instead of broken regex extractor
+feat: add paste-text tab to Scope 3 engine
