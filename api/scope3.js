@@ -1,32 +1,3 @@
-function extractTextFromPDFBase64(base64Data) {
-  try {
-    const buffer = Buffer.from(base64Data, 'base64');
-    const pdfString = buffer.toString('latin1');
-    const textParts = [];
-    const btRegex = /BT([\s\S]*?)ET/g;
-    let match;
-    while ((match = btRegex.exec(pdfString)) !== null) {
-      const btContent = match[1];
-      const tjRegex = /\(([^)]{1,500})\)\s*(?:Tj|TJ|'|")/g;
-      let tjMatch;
-      while ((tjMatch = tjRegex.exec(btContent)) !== null) {
-        const text = tjMatch[1].replace(/\\n/g,'\n').replace(/\\t/g,' ').trim();
-        if (text.length > 1) textParts.push(text);
-      }
-    }
-    const streamRegex = /stream([\s\S]*?)endstream/g;
-    while ((match = streamRegex.exec(pdfString)) !== null) {
-      const textRegex = /\(([^)]{2,200})\)/g;
-      let tMatch;
-      while ((tMatch = textRegex.exec(match[1])) !== null) {
-        const text = tMatch[1].replace(/\\n/g,'\n').trim();
-        if (text.length > 2) textParts.push(text);
-      }
-    }
-    return [...new Set(textParts)].join(' ').substring(0, 8000);
-  } catch(e) { return ''; }
-}
-
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -40,10 +11,9 @@ module.exports = async function handler(req, res) {
   const { fileData, mimeType, model } = req.body || {};
   if (!fileData || !mimeType) return res.status(400).json({ error: 'fileData and mimeType required' });
 
-  const allowed = ['application/pdf','image/jpeg','image/jpg','image/png'];
+  const allowed = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
   if (!allowed.includes(mimeType)) return res.status(400).json({ error: 'Unsupported file type' });
 
-  // Model selection — frontend passes model string, fallback to free default
   const MODELS = {
     'qwen-free':    'qwen/qwen2.5-vl-32b-instruct:free',
     'gemma-free':   'google/gemma-4-31b-it:free',
@@ -55,9 +25,15 @@ module.exports = async function handler(req, res) {
 
   const prompt = `You are an expert carbon accounting analyst specialising in Scope 3 supply chain emissions for ASEAN manufacturing suppliers.
 
-Analyse this supplier document carefully and extract every carbon-relevant data point you can find. Look for electricity consumption (kWh), fuel types and quantities, production volumes, company name, country, reporting period, and any stated emissions figures.
+Analyse this supplier document carefully and extract every carbon-relevant data point. Look for:
+- Electricity consumption (kWh)
+- Fuel type and quantity (litres, therms, m3, kg)
+- Production or output volume
+- Company name and country
+- Reporting period or billing date
+- Any stated emissions figures (tCO2e)
 
-Return ONLY valid JSON with no markdown and no text outside the JSON:
+Return ONLY valid JSON, no markdown, no text outside the JSON:
 
 {
   "extracted": {
@@ -73,27 +49,27 @@ Return ONLY valid JSON with no markdown and no text outside the JSON:
     "existing_emissions_data": "value or null"
   },
   "confidence": "HIGH or MEDIUM or LOW",
-  "confidence_reason": "one sentence explaining confidence level",
-  "data_gaps": ["list", "of", "missing", "fields"],
-  "summary": "2-3 sentence professional summary of findings for Scope 3 calculation",
+  "confidence_reason": "one sentence",
+  "data_gaps": ["missing", "fields"],
+  "summary": "2-3 sentence professional summary for Scope 3 calculation",
   "methodology_note": "activity-based, spend-based, or hybrid and why"
-}
-
-Confidence: HIGH = direct energy or fuel consumption data found. MEDIUM = production volumes found but no energy data. LOW = only company or country found.`;
+}`;
 
   try {
-    const messageContent = [];
+    // Use OpenRouter's native file handling via image_url with data URI
+    // This works for both PDFs and images — OpenRouter handles extraction
+    const dataUri = `data:${mimeType};base64,${fileData}`;
 
-    if (mimeType === 'application/pdf') {
-      const extractedText = extractTextFromPDFBase64(fileData);
-      const docText = extractedText.length > 50
-        ? `SUPPLIER DOCUMENT (extracted from PDF):\n\n${extractedText}\n\n${prompt}`
-        : `Analyse this supplier document for carbon data.\n\n${prompt}`;
-      messageContent.push({ type: 'text', text: docText });
-    } else {
-      messageContent.push({ type: 'image', source: { type: 'base64', media_type: mimeType, data: fileData } });
-      messageContent.push({ type: 'text', text: prompt });
-    }
+    const messageContent = [
+      {
+        type: 'image_url',
+        image_url: { url: dataUri }
+      },
+      {
+        type: 'text',
+        text: prompt
+      }
+    ];
 
     const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
@@ -113,7 +89,7 @@ Confidence: HIGH = direct energy or fuel consumption data found. MEDIUM = produc
     if (!orRes.ok) {
       const errText = await orRes.text();
       console.error('OpenRouter error:', orRes.status, errText);
-      return res.status(502).json({ error: 'AI service error. Try again.' });
+      return res.status(502).json({ error: 'AI service error: ' + errText });
     }
 
     const orData = await orRes.json();
@@ -121,11 +97,12 @@ Confidence: HIGH = direct energy or fuel consumption data found. MEDIUM = produc
     if (!raw) return res.status(502).json({ error: 'No AI response. Try again.' });
 
     const clean = raw.replace(/^```json\s*/i,'').replace(/^```\s*/i,'').replace(/```\s*$/i,'').trim();
+
     let parsed;
     try {
       parsed = JSON.parse(clean);
     } catch(e) {
-      console.error('Parse error:', e.message);
+      console.error('Parse error:', e.message, '| Raw:', raw.substring(0, 200));
       return res.status(200).json({
         extracted: {},
         confidence: 'LOW',
