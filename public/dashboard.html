@@ -1327,6 +1327,16 @@
           <div style="max-width:680px;">
 
             <!-- Upload box -->
+            <div style="margin-bottom:20px;">
+              <div style="display:flex;gap:8px;margin-bottom:16px;">
+                <button id="tab-upload" onclick="switchS3Tab('upload')" style="flex:1;padding:8px;border:1px solid var(--teal);border-radius:6px;background:var(--teal);color:#fff;font-weight:600;cursor:pointer;font-size:13px;">📄 Upload File</button>
+                <button id="tab-paste" onclick="switchS3Tab('paste')" style="flex:1;padding:8px;border:1px solid var(--db-border);border-radius:6px;background:var(--db-surface);color:var(--db-ink);font-weight:600;cursor:pointer;font-size:13px;">📋 Paste Text</button>
+              </div>
+              <div id="s3-paste-box" style="display:none;">
+                <textarea id="s3-paste-input" placeholder="Paste document text here — invoice, utility bill, delivery note..." style="width:100%;height:180px;padding:14px;border:1px solid var(--db-border);border-radius:8px;background:var(--db-surface);color:var(--db-ink);font-size:14px;line-height:1.6;resize:vertical;box-sizing:border-box;"></textarea>
+                <button id="s3-analyse-paste-btn" onclick="analyseScope3Text()" style="width:100%;margin-top:12px;padding:13px;background:var(--teal);color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;">Analyse Text →</button>
+              </div>
+            </div>
             <div id="s3-upload-box" style="border:2px dashed var(--db-border-mid);border-radius:12px;padding:40px;text-align:center;margin-bottom:24px;transition:border-color 0.2s;">
               <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.4;margin-bottom:12px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
               <p style="font-weight:600;margin-bottom:6px;color:var(--db-ink);">Drop your supplier document here</p>
@@ -2615,6 +2625,69 @@ function fileToBase64(file) {
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
+}
+
+function switchS3Tab(tab) {
+  const uploadBox = document.getElementById('s3-upload-box');
+  const pasteBox = document.getElementById('s3-paste-box');
+  const tabUpload = document.getElementById('tab-upload');
+  const tabPaste = document.getElementById('tab-paste');
+  if (tab === 'upload') {
+    uploadBox.style.display = 'block';
+    pasteBox.style.display = 'none';
+    tabUpload.style.background = 'var(--teal)'; tabUpload.style.color = '#fff'; tabUpload.style.borderColor = 'var(--teal)';
+    tabPaste.style.background = 'var(--db-surface)'; tabPaste.style.color = 'var(--db-ink)'; tabPaste.style.borderColor = 'var(--db-border)';
+  } else {
+    uploadBox.style.display = 'none';
+    pasteBox.style.display = 'block';
+    tabPaste.style.background = 'var(--teal)'; tabPaste.style.color = '#fff'; tabPaste.style.borderColor = 'var(--teal)';
+    tabUpload.style.background = 'var(--db-surface)'; tabUpload.style.color = 'var(--db-ink)'; tabUpload.style.borderColor = 'var(--db-border)';
+  }
+}
+
+async function analyseScope3Text() {
+  const text = document.getElementById('s3-paste-input').value.trim();
+  if (!text || text.length < 20) {
+    alert('Please paste some document text first.');
+    return;
+  }
+  const model = document.getElementById('s3-model-select')?.value || 'qwen-free';
+  document.getElementById('s3-analyse-paste-btn').style.display = 'none';
+  document.getElementById('s3-loading').style.display = 'block';
+  document.getElementById('s3-results').style.display = 'none';
+  document.getElementById('s3-error').style.display = 'none';
+  try {
+    const response = await fetch('/api/scope3text', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, model })
+    });
+    const data = await response.json();
+    document.getElementById('s3-loading').style.display = 'none';
+    if (!response.ok || data.error) {
+      document.getElementById('s3-error').textContent = data.error || 'Something went wrong.';
+      document.getElementById('s3-error').style.display = 'block';
+      document.getElementById('s3-analyse-paste-btn').style.display = 'block';
+      return;
+    }
+    const grid = document.getElementById('s3-results-grid');
+    grid.innerHTML = '';
+    if (data.extracted) {
+      Object.entries(data.extracted).forEach(([key, value]) => {
+        if (value && value !== 'null') {
+          grid.innerHTML += `<div style="background:var(--db-surface);border:1px solid var(--db-border);border-radius:8px;padding:14px 16px;"><div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--db-ink-muted);margin-bottom:4px;">${key.replace(/_/g,' ')}</div><div style="font-size:15px;font-weight:600;color:var(--db-ink);">${value}</div></div>`;
+        }
+      });
+    }
+    document.getElementById('s3-raw-output').textContent = data.summary || '';
+    document.getElementById('s3-results').style.display = 'block';
+    document.getElementById('s3-analyse-paste-btn').style.display = 'block';
+  } catch(err) {
+    document.getElementById('s3-loading').style.display = 'none';
+    document.getElementById('s3-error').textContent = 'Network error: ' + err.message;
+    document.getElementById('s3-error').style.display = 'block';
+    document.getElementById('s3-analyse-paste-btn').style.display = 'block';
+  }
 }
 </script>
 </body>
