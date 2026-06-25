@@ -45,8 +45,9 @@ module.exports = async function handler(req, res) {
 
   // Model selection — frontend passes model string, fallback to free default
   const MODELS = {
-    'qwen-free':    'qwen/qwen2.5-vl-72b-instruct:free',
-    'llama-free':   'meta-llama/llama-3.2-11b-vision-instruct:free',
+    'qwen-free':    'qwen/qwen2.5-vl-32b-instruct:free',
+    'gemma-free':   'google/gemma-4-31b-it:free',
+    'auto-free':    'openrouter/free',
     'gemini-flash': 'google/gemini-2.0-flash-001',
     'claude':       'anthropic/claude-sonnet-4-5'
   };
