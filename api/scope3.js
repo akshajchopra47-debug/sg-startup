@@ -15,13 +15,13 @@ module.exports = async function handler(req, res) {
   if (!allowed.includes(mimeType)) return res.status(400).json({ error: 'Unsupported file type' });
 
   const MODELS = {
-    'qwen-free':    'qwen/qwen2.5-vl-32b-instruct:free',
-    'gemma-free':   'google/gemma-4-31b-it:free',
-    'auto-free':    'openrouter/free',
+    'gemma-free':   'google/gemma-3-27b-it:free',
+    'llama-free':   'meta-llama/llama-3.3-70b-instruct:free',
+    'mistral-free': 'mistralai/mistral-small-3.2-24b-instruct:free',
     'gemini-flash': 'google/gemini-2.0-flash-001',
-    'claude':       'anthropic/claude-sonnet-4-5'
+    'claude':       'anthropic/claude-sonnet-4-6'
   };
-  const selectedModel = MODELS[model] || MODELS['qwen-free'];
+  const selectedModel = MODELS[model] || MODELS['gemma-free'];
 
   const prompt = `You are an expert carbon accounting analyst specialising in Scope 3 supply chain emissions for ASEAN manufacturing suppliers.
 

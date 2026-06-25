@@ -1345,11 +1345,11 @@
               <div style="margin-bottom:20px;">
                 <label style="display:block;font-size:13px;font-weight:600;color:var(--db-ink-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em;">AI Model</label>
                 <select id="s3-model-select" style="width:100%;padding:10px 14px;border:1px solid var(--db-border);border-radius:8px;background:var(--db-surface);color:var(--db-ink);font-size:14px;cursor:pointer;">
-                  <option value="qwen-free">⚡ Qwen 2.5 VL 32B — Free (Recommended)</option>
-                  <option value="gemma-free">🔷 Gemma 4 31B — Free (Google)</option>
-                  <option value="auto-free">🎲 Auto Free — OpenRouter picks best free model</option>
+                  <option value="gemma-free">⚡ Gemma 3 27B — Free (Recommended)</option>
+                  <option value="llama-free">🦙 Llama 3.3 70B — Free</option>
+                  <option value="mistral-free">🌬️ Mistral Small 3.2 — Free</option>
                   <option value="gemini-flash">✨ Gemini 2.0 Flash — Fast (paid)</option>
-                  <option value="claude">🧠 Claude Sonnet 4.5 — Best (paid)</option>
+                  <option value="claude">🧠 Claude Sonnet — Best (paid)</option>
                 </select>
               </div>
               <button class="btn btn-teal" onclick="document.getElementById('s3-file-input').click()">Choose File</button>
@@ -2606,6 +2606,98 @@ async function analyseScope3Document() {
         }
       });
     }
+
+// ── AUTO-CALCULATE EMISSIONS ─────────────────────────────────
+if (data.extracted) {
+  const calcPayload = {
+    country:          data.extracted.country          || null,
+    electricity_kwh:  data.extracted.electricity_kwh  || null,
+    fuel_type:        data.extracted.fuel_type         || null,
+    fuel_quantity:    data.extracted.fuel_quantity     || null
+  };
+
+  const hasCalcData = calcPayload.electricity_kwh || calcPayload.fuel_type;
+
+  if (hasCalcData) {
+    fetch('/api/calculate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(calcPayload)
+    })
+    .then(r => r.json())
+    .then(calc => {
+      if (calc.error) return;
+
+      // Build the CO2e results panel
+      let html = `
+        <div style="margin-top:24px;padding:20px 24px;background:var(--db-surface);border:1px solid var(--db-border);border-radius:12px;">
+          <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--db-ink-muted);margin-bottom:16px;font-weight:600;">Carbon Calculation Results</div>
+
+          <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;">
+            <div style="flex:1;min-width:140px;background:#f0f7ef;border:1px solid #c8dfc5;border-radius:8px;padding:16px;">
+              <div style="font-size:11px;color:#4a7c59;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">Total Emissions</div>
+              <div style="font-size:28px;font-weight:700;color:#2d5a3d;">\${calc.total_tco2e}</div>
+              <div style="font-size:12px;color:#4a7c59;margin-top:2px;">tCO₂e</div>
+            </div>`;
+
+      if (calc.scope2) {
+        html += `
+            <div style="flex:1;min-width:140px;background:var(--db-surface);border:1px solid var(--db-border);border-radius:8px;padding:16px;">
+              <div style="font-size:11px;color:var(--db-ink-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">Scope 2 — Electricity</div>
+              <div style="font-size:22px;font-weight:600;color:var(--db-ink);">\${calc.scope2.tco2e}</div>
+              <div style="font-size:12px;color:var(--db-ink-muted);margin-top:2px;">tCO₂e · \${calc.scope2.kwh.toLocaleString()} kWh</div>
+            </div>`;
+      }
+
+      if (calc.scope1) {
+        html += `
+            <div style="flex:1;min-width:140px;background:var(--db-surface);border:1px solid var(--db-border);border-radius:8px;padding:16px;">
+              <div style="font-size:11px;color:var(--db-ink-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">Scope 1 — \${calc.scope1.fuel_type}</div>
+              <div style="font-size:22px;font-weight:600;color:var(--db-ink);">\${calc.scope1.tco2e}</div>
+              <div style="font-size:12px;color:var(--db-ink-muted);margin-top:2px;">tCO₂e · \${calc.scope1.quantity.toLocaleString()} \${calc.scope1.unit}</div>
+            </div>`;
+      }
+
+      html += \`</div>\`;
+
+      // Methodology breakdown
+      if (calc.methodology && calc.methodology.length > 0) {
+        html += \`
+          <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--db-ink-muted);margin-bottom:8px;font-weight:600;">Methodology</div>
+          <div style="font-size:12px;color:var(--db-ink-muted);line-height:1.8;">\`;
+        calc.methodology.forEach(m => {
+          html += \`<div style="padding:4px 0;border-bottom:1px solid var(--db-border);">• \${m}</div>\`;
+        });
+        html += \`</div>\`;
+      }
+
+      // Warnings
+      if (calc.warnings && calc.warnings.length > 0) {
+        html += \`
+          <div style="margin-top:12px;padding:10px 14px;background:#fffbeb;border:1px solid #fcd34d;border-radius:6px;font-size:12px;color:#92400e;">
+            ⚠️ \${calc.warnings.join(' ')}
+          </div>\`;
+      }
+
+      html += \`</div>\`;
+
+      // Inject below the extracted data grid
+      const resultsDiv = document.getElementById('s3-results');
+      if (resultsDiv) {
+        // Remove any previous calc panel before adding new one
+        const existing = document.getElementById('s3-calc-panel');
+        if (existing) existing.remove();
+        const panel = document.createElement('div');
+        panel.id = 's3-calc-panel';
+        panel.innerHTML = html;
+        resultsDiv.appendChild(panel);
+      }
+    })
+    .catch(() => {}); // Silent fail — extraction still shows even if calc fails
+  }
+}
+// ── END EMISSION CALCULATOR ───────────────────────────────────
+
     document.getElementById('s3-raw-output').textContent = data.summary || '';
     document.getElementById('s3-results').style.display = 'block';
     document.getElementById('s3-analyse-btn').style.display = 'block';
@@ -2679,6 +2771,98 @@ async function analyseScope3Text() {
         }
       });
     }
+
+// ── AUTO-CALCULATE EMISSIONS ─────────────────────────────────
+if (data.extracted) {
+  const calcPayload = {
+    country:          data.extracted.country          || null,
+    electricity_kwh:  data.extracted.electricity_kwh  || null,
+    fuel_type:        data.extracted.fuel_type         || null,
+    fuel_quantity:    data.extracted.fuel_quantity     || null
+  };
+
+  const hasCalcData = calcPayload.electricity_kwh || calcPayload.fuel_type;
+
+  if (hasCalcData) {
+    fetch('/api/calculate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(calcPayload)
+    })
+    .then(r => r.json())
+    .then(calc => {
+      if (calc.error) return;
+
+      // Build the CO2e results panel
+      let html = `
+        <div style="margin-top:24px;padding:20px 24px;background:var(--db-surface);border:1px solid var(--db-border);border-radius:12px;">
+          <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--db-ink-muted);margin-bottom:16px;font-weight:600;">Carbon Calculation Results</div>
+
+          <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;">
+            <div style="flex:1;min-width:140px;background:#f0f7ef;border:1px solid #c8dfc5;border-radius:8px;padding:16px;">
+              <div style="font-size:11px;color:#4a7c59;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">Total Emissions</div>
+              <div style="font-size:28px;font-weight:700;color:#2d5a3d;">\${calc.total_tco2e}</div>
+              <div style="font-size:12px;color:#4a7c59;margin-top:2px;">tCO₂e</div>
+            </div>`;
+
+      if (calc.scope2) {
+        html += `
+            <div style="flex:1;min-width:140px;background:var(--db-surface);border:1px solid var(--db-border);border-radius:8px;padding:16px;">
+              <div style="font-size:11px;color:var(--db-ink-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">Scope 2 — Electricity</div>
+              <div style="font-size:22px;font-weight:600;color:var(--db-ink);">\${calc.scope2.tco2e}</div>
+              <div style="font-size:12px;color:var(--db-ink-muted);margin-top:2px;">tCO₂e · \${calc.scope2.kwh.toLocaleString()} kWh</div>
+            </div>`;
+      }
+
+      if (calc.scope1) {
+        html += `
+            <div style="flex:1;min-width:140px;background:var(--db-surface);border:1px solid var(--db-border);border-radius:8px;padding:16px;">
+              <div style="font-size:11px;color:var(--db-ink-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">Scope 1 — \${calc.scope1.fuel_type}</div>
+              <div style="font-size:22px;font-weight:600;color:var(--db-ink);">\${calc.scope1.tco2e}</div>
+              <div style="font-size:12px;color:var(--db-ink-muted);margin-top:2px;">tCO₂e · \${calc.scope1.quantity.toLocaleString()} \${calc.scope1.unit}</div>
+            </div>`;
+      }
+
+      html += \`</div>\`;
+
+      // Methodology breakdown
+      if (calc.methodology && calc.methodology.length > 0) {
+        html += \`
+          <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--db-ink-muted);margin-bottom:8px;font-weight:600;">Methodology</div>
+          <div style="font-size:12px;color:var(--db-ink-muted);line-height:1.8;">\`;
+        calc.methodology.forEach(m => {
+          html += \`<div style="padding:4px 0;border-bottom:1px solid var(--db-border);">• \${m}</div>\`;
+        });
+        html += \`</div>\`;
+      }
+
+      // Warnings
+      if (calc.warnings && calc.warnings.length > 0) {
+        html += \`
+          <div style="margin-top:12px;padding:10px 14px;background:#fffbeb;border:1px solid #fcd34d;border-radius:6px;font-size:12px;color:#92400e;">
+            ⚠️ \${calc.warnings.join(' ')}
+          </div>\`;
+      }
+
+      html += \`</div>\`;
+
+      // Inject below the extracted data grid
+      const resultsDiv = document.getElementById('s3-results');
+      if (resultsDiv) {
+        // Remove any previous calc panel before adding new one
+        const existing = document.getElementById('s3-calc-panel');
+        if (existing) existing.remove();
+        const panel = document.createElement('div');
+        panel.id = 's3-calc-panel';
+        panel.innerHTML = html;
+        resultsDiv.appendChild(panel);
+      }
+    })
+    .catch(() => {}); // Silent fail — extraction still shows even if calc fails
+  }
+}
+// ── END EMISSION CALCULATOR ───────────────────────────────────
+
     document.getElementById('s3-raw-output').textContent = data.summary || '';
     document.getElementById('s3-results').style.display = 'block';
     document.getElementById('s3-analyse-paste-btn').style.display = 'block';
