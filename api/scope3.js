@@ -1,51 +1,33 @@
 module.exports = async function handler(req, res) {
-
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  if (req.method === 'OPTIONS') {
-    return res.status(204).end();
-  }
-
+  if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
-    return res.status(500).json({
-      error: 'OpenRouter API key not configured. Add OPENROUTER_API_KEY to Vercel environment variables.'
-    });
+    return res.status(500).json({ error: 'API key not configured' });
   }
 
-  const { fileData, mimeType, fileName } = req.body || {};
-
+  const { fileData, mimeType } = req.body || {};
   if (!fileData || !mimeType) {
-    return res.status(400).json({ error: 'fileData and mimeType are required' });
+    return res.status(400).json({ error: 'fileData and mimeType required' });
   }
 
-  const allowed = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+  const allowed = ['application/pdf','image/jpeg','image/jpg','image/png'];
   if (!allowed.includes(mimeType)) {
-    return res.status(400).json({
-      error: 'Unsupported file type. Please upload a PDF, JPG, or PNG.'
-    });
+    return res.status(400).json({ error: 'Unsupported file type' });
   }
 
-  const extractionPrompt = `You are an expert carbon accounting analyst specialising in Scope 3 supply chain emissions for ASEAN manufacturing suppliers.
+  const prompt = `You are a carbon accounting analyst for ASEAN supply chains.
+Analyse this supplier document and extract carbon-relevant data.
+The document may be in any language — analyse it regardless.
 
-Analyse this supplier document carefully. It may be an invoice, utility bill, delivery note, or factory record from a supplier in Vietnam, Bangladesh, Indonesia, India, Thailand, or another ASEAN country. The document may be in English or another language.
-
-Extract every carbon-relevant data point you can find. Look specifically for:
-- Energy consumption (electricity in kWh, fuel in litres or kg)
-- Production or output volume (units, kg, tonnes, metres)
-- Fuel types used (diesel, LPG, natural gas, coal, etc.)
-- Company name and location or country
-- Industry or product type
-- Reporting period or invoice date
-- Any existing emissions data or carbon figures
-
-Return ONLY a valid JSON object in this exact format with no additional text, markdown, or explanation:
+Return ONLY valid JSON, no markdown, no explanation:
 
 {
   "extracted": {
@@ -61,98 +43,67 @@ Return ONLY a valid JSON object in this exact format with no additional text, ma
     "existing_emissions_data": "value or null"
   },
   "confidence": "HIGH or MEDIUM or LOW",
-  "confidence_reason": "one sentence explaining confidence level",
-  "data_gaps": ["list", "of", "missing", "fields"],
-  "summary": "2-3 sentence professional summary of what was found and what it means for Scope 3 calculation",
-  "methodology_note": "which calculation method will be used: activity-based, spend-based, or hybrid, and why"
+  "confidence_reason": "one sentence",
+  "data_gaps": ["missing", "fields"],
+  "summary": "2-3 sentence summary of findings for Scope 3 calculation",
+  "methodology_note": "activity-based, spend-based, or hybrid — and why"
 }
 
-Confidence levels:
-HIGH = direct energy or fuel consumption data found
-MEDIUM = production volumes found but no direct energy data
-LOW = only company or country or industry found, no activity data`;
+Confidence: HIGH = energy/fuel data found. MEDIUM = production volumes only. LOW = company/country only.`;
 
   try {
-    const messageContent = [];
-
+    const content = [];
     if (mimeType === 'application/pdf') {
-      messageContent.push({
-        type: 'document',
-        source: {
-          type: 'base64',
-          media_type: 'application/pdf',
-          data: fileData
-        }
-      });
+      content.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: fileData } });
     } else {
-      messageContent.push({
-        type: 'image',
-        source: {
-          type: 'base64',
-          media_type: mimeType,
-          data: fileData
-        }
-      });
+      content.push({ type: 'image', source: { type: 'base64', media_type: mimeType, data: fileData } });
     }
+    content.push({ type: 'text', text: prompt });
 
-    messageContent.push({
-      type: 'text',
-      text: extractionPrompt
-    });
-
-    const orResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
         'HTTP-Referer': 'https://bholi-pi.vercel.app',
-        'X-Title': 'The Climate Architects Scope 3 Engine'
+        'X-Title': 'TCA Scope 3 Engine'
       },
       body: JSON.stringify({
         model: 'anthropic/claude-sonnet-4-5',
         max_tokens: 1500,
-        messages: [{ role: 'user', content: messageContent }]
+        messages: [{ role: 'user', content }]
       })
     });
 
-    if (!orResponse.ok) {
-      const errText = await orResponse.text();
-      console.error('OpenRouter error:', orResponse.status, errText);
-      return res.status(502).json({
-        error: 'AI service error. Please try again.'
-      });
+    if (!orRes.ok) {
+      const t = await orRes.text();
+      console.error('OpenRouter error:', orRes.status, t);
+      return res.status(502).json({ error: 'AI service error. Try again.' });
     }
 
-    const orData = await orResponse.json();
-    const rawContent = orData?.choices?.[0]?.message?.content;
-
-    if (!rawContent) {
-      return res.status(502).json({ error: 'No response from AI. Please try again.' });
-    }
+    const orData = await orRes.json();
+    const raw = orData?.choices?.[0]?.message?.content;
+    if (!raw) return res.status(502).json({ error: 'No AI response. Try again.' });
 
     let parsed;
     try {
-      const cleaned = rawContent
-        .replace(/^```json\s*/i, '')
-        .replace(/^```\s*/i, '')
-        .replace(/```\s*$/i, '')
-        .trim();
-      parsed = JSON.parse(cleaned);
-    } catch (parseErr) {
-      console.error('JSON parse error:', parseErr.message);
+      const clean = raw.replace(/^```json\s*/i,'').replace(/^```\s*/i,'').replace(/```\s*$/i,'').trim();
+      parsed = JSON.parse(clean);
+    } catch(e) {
+      console.error('Parse error:', e.message, 'Raw:', raw);
       return res.status(200).json({
         extracted: {},
         confidence: 'LOW',
-        confidence_reason: 'Could not parse structured data from document',
+        confidence_reason: 'Could not parse structured data',
         data_gaps: ['all fields'],
-        summary: rawContent,
+        summary: raw,
         methodology_note: 'Manual review required'
       });
     }
 
     return res.status(200).json(parsed);
 
-  } catch (err) {
+  } catch(err) {
     console.error('scope3 error:', err.message);
     return res.status(500).json({ error: 'Server error: ' + err.message });
   }

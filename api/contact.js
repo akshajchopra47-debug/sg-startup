@@ -9,24 +9,14 @@ module.exports = async function handler(req, res) {
   }
 
   const { full_name, email, company, topic, form_type } = req.body || {};
-
   if (!full_name || !email) {
-    return res.status(400).json({ error: 'Name and email are required' });
+    return res.status(400).json({ error: 'Name and email required' });
   }
 
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(email)) {
-    return res.status(400).json({ error: 'Invalid email address' });
-  }
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  if (!emailOk) return res.status(400).json({ error: 'Invalid email' });
 
-  console.log('Contact form submission:', {
-    form_type: form_type || 'book_call',
-    full_name,
-    email,
-    company: company || null,
-    topic: topic || null,
-    timestamp: new Date().toISOString()
-  });
+  console.log('Contact:', { form_type, full_name, email, company, topic, ts: new Date().toISOString() });
 
   return res.status(201).json({
     success: true,
